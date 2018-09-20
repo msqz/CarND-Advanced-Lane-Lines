@@ -3,11 +3,22 @@ import numpy as np
 import glob
 import cv2
 import matplotlib.image as mpimg
+from PIL import Image
 import matplotlib.pyplot as plt
+import skvideo.io
 import time
+import sys
+
+import threshold
+import lanes
+import convolution
+import helpers
 
 mtx = None
 dist = None
+frame_no = 0
+left_fit = None
+right_fit = None
 
 
 def calibrate_camera():
@@ -39,55 +50,87 @@ def undistort(img):
         mtx, dist, (w, h), 1, (w, h))
     undistorted = cv2.undistort(img, mtx, dist, None, newcameramtx)
     x, y, w, h = roi
-    return undistorted[y:y+h, x:x+w]
+    return cv2.resize(undistorted[y:y+h, x:x+w], (1280, 720))
 
 
 def warp(img):
-    resized = cv2.resize(img, (1280, 720))
-    src = np.float32([[250, 720], [608, 450], [690, 450], [1070, 720]])
-    dst = np.float32([[250, 720], [250, 0], [1070, 0], [1070, 720]])
+    src = np.float32([[233, 720], [605, 450], [691, 450], [1087, 720]])
+    dst = np.float32([[233, 720], [233, 0], [1087, 0], [1087, 720]])
     M = cv2.getPerspectiveTransform(src, dst)
-    return cv2.warpPerspective(resized, M, (1280, 720))
+    return cv2.warpPerspective(img, M, (1280, 720)), M
 
 
-def binarize(img):
-    hls = cv2.cvtColor(img, cv2.COLOR_RGB2HLS)
-    s_channel = hls[:, :, 2]
-    s_binary = np.zeros_like(s_channel)
-    s_binary[(s_channel >= 170) & (s_channel <= 255)] = 1
+def draw_lane(img, left_fitx, right_fitx, ploty, orig, M):
+    warp_zero = np.zeros_like(img).astype(np.uint8)
+    color_warp = np.dstack((warp_zero, warp_zero, warp_zero))
 
-    gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-    sobelx = cv2.Sobel(gray, cv2.CV_64F, 1, 0)
-    abs_sobelx = np.absolute(sobelx)
-    scaled_sobel = np.uint8(255*abs_sobelx/np.max(abs_sobelx))
-    sx_binary = np.zeros_like(scaled_sobel)
-    sx_binary[(scaled_sobel >= 20) & (scaled_sobel <= 100)] = 1
+    pts_left = np.array([np.transpose(np.vstack([left_fitx, ploty]))])
+    pts_right = np.array([
+        np.flipud(np.transpose(np.vstack([right_fitx, ploty])))
+    ])
 
-    binary = np.zeros_like(sx_binary)
-    binary[(sx_binary == 1) | (s_binary == 1)] = 1
+    pts = np.hstack((pts_left, pts_right))
+    cv2.fillPoly(color_warp, np.int_([pts]), (0, 255, 0))
 
-    return binary
-
-
-def detect_lanes(img):
-    histogram = np.sum(img[img.shape])
+    Minv = np.linalg.inv(M)
+    newwarp = cv2.warpPerspective(
+        color_warp, Minv, (orig.shape[1], orig.shape[0]))
+    return cv2.addWeighted(orig, 1, newwarp, 0.3, 0)
 
 
 def pipeline(img):
-    binary = binarize(img)
-    undistorted = undistort(binary)
-    warped = warp(undistorted)
-    lanes = detect_lanes(warped)
-    plt.imshow(lanes)
-    plt.show()
+    global left_fit
+    global right_fit
+    undistorted = undistort(img)
+    binary = threshold.to_binary(undistorted)
+    warped, M = warp(binary)
+    #left_fitx, right_fitx, ploty = convolution.detect_lanes(warped)
+    if (frame_no % 5 == 0):
+        left_fitx, right_fitx, ploty, l_fit, r_fit = lanes.fit_polynomial(
+            warped)
+    else:
+        left_fitx, right_fitx, ploty, l_fit, r_fit = lanes.search_around_poly(
+            warped, left_fit, right_fit)
+
+    left_fit = l_fit
+    right_fit = r_fit
 #     determine_curvature()
 #     determine_position()
-#     warp_lanes()
+    lane = draw_lane(warped, left_fitx, right_fitx, ploty, undistorted, M)
+    return lane, warped * 255, binary * 255
 #     draw_stats()
 #     save_output()
 
 
 mtx, dist = calibrate_camera()
 
-image = mpimg.imread('test_images/test5.jpg')
-pipeline(image)
+if len(sys.argv) != 2:
+    raise Exception('missing path')
+
+if sys.argv[1][-4:] == ".mp4":
+    reader = skvideo.io.FFmpegReader(sys.argv[1])
+    writer_lane = skvideo.io.FFmpegWriter("/home/m/Videos/output-lane.mp4")
+    writer_warped = skvideo.io.FFmpegWriter("/home/m/Videos/output-warped.mp4")
+    writed_combined = skvideo.io.FFmpegWriter("/home/m/Videos/output-combined.mp4")
+
+    for frame in reader.nextFrame():
+        lane, warped, binary = pipeline(frame)
+        combined = np.copy(lane)
+        
+        warped_sm = cv2.resize(warped, (320, 180))
+        combined[:180, -320:] = np.dstack((warped_sm, warped_sm, warped_sm))
+
+        binary_sm = cv2.resize(binary, (320, 180))
+        combined[:180, -320*2:-320] = np.dstack((binary_sm, binary_sm, binary_sm))
+
+        writer_lane.writeFrame(lane)
+        writer_warped.writeFrame(np.dstack((warped, warped, warped)))
+        writed_combined.writeFrame(combined)
+        frame_no += 1
+
+    reader.close()
+    writer_lane.close()
+    writer_warped.close()
+else:
+    image = np.asarray(Image.open(sys.argv[1]))
+    helpers.show(pipeline(image))
