@@ -111,7 +111,7 @@ def draw_lane(img, left_fitx, right_fitx, ploty, orig, M):
     new_warp_ext = new_warp_ext[720:-720, 1280:-1280]
     # extending end
 
-    return cv2.addWeighted(orig, 1, new_warp_ext, 0.3, 0), lines
+    return cv2.addWeighted(orig, 1, new_warp_ext, 0.3, 0), lines_ext
 
 
 def determine_curvature(left_fitx, right_fitx, ploty):
