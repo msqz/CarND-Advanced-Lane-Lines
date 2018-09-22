@@ -13,6 +13,11 @@ import threshold
 import lanes
 import convolution
 import helpers
+import camera
+import drawer
+
+profile = False
+t = time.clock()
 
 mtx = None
 dist = None
@@ -25,72 +30,38 @@ warping_from = np.float32([[200, 720], [604, 450], [696, 450], [1120, 720]])
 warping_to = np.float32([[200, 720], [200, 0], [1120, 0], [1120, 720]])
 
 
-def calibrate_camera():
-    criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
-    objp = np.zeros((6*9, 3), np.float32)
-    objp[:, :2] = np.mgrid[0:9, 0:6].T.reshape(-1, 2)
-    objpoints = []
-    imgpoints = []
-    images = glob.glob('camera_cal/*.jpg')
-
-    for fname in images:
-        img = cv2.imread(fname)
-        gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-        ret, corners = cv2.findChessboardCorners(gray, (9, 6), None)
-        if ret is True:
-            objpoints.append(objp)
-            corners2 = cv2.cornerSubPix(
-                gray, corners, (11, 11), (-1, -1), criteria)
-            imgpoints.append(corners)
-
-    ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(
-        objpoints, imgpoints, gray.shape[::-1], None, None)
-    return mtx, dist
-
-
-def undistort(img):
-    h, w = img.shape[:2]
-    newcameramtx, roi = cv2.getOptimalNewCameraMatrix(
-        mtx, dist, (w, h), 1, (w, h))
-    undistorted = cv2.undistort(img, mtx, dist, None, newcameramtx)
-    x, y, w, h = roi
-    return cv2.resize(undistorted[y:y+h, x:x+w], (1280, 720))
+def click_stopwatch(action):
+    global t
+    measured = round(time.clock() - t, 2) * 1000
+    print('{}: {}'.format(action, measured))
+    t = time.clock()
 
 
 def warp(img):
-    # src = np.float32([[233, 720], [605, 450], [691, 450], [1087, 720]])
-    # dst = np.float32([[233, 720], [233, 0], [1087, 0], [1087, 720]])
-
     M = cv2.getPerspectiveTransform(warping_from, warping_to)
     return cv2.warpPerspective(img, M, (1280, 720)), M
 
 
 def draw_lane(img, left_fitx, right_fitx, ploty, orig, M):
-
     pts_left = np.array([np.transpose(np.vstack([left_fitx, ploty]))])
     pts_right = np.array([
         np.flipud(np.transpose(np.vstack([right_fitx, ploty])))
     ])
 
     pts = np.hstack((pts_left, pts_right))
-
     pts_ext = np.copy(pts)
     pts_ext[0, :, 0] += 1280
     pts_ext[0, :, 1] += 720
-
-    color_warp_ext = np.zeros((720*3, 1280*3, 3)).astype(np.uint8)
+    color_warp_ext = np.zeros((720*3, 1280*3, 3), dtype=np.uint8)
     cv2.fillPoly(color_warp_ext, np.int_([pts_ext]), (0, 255, 0))
-
     lines_ext = np.zeros((color_warp_ext.shape[0], color_warp_ext.shape[1]))
     cv2.polylines(lines_ext, np.int_([pts_ext]), False, (255, 0, 0), 15)
     lines_ext = lines_ext[720:-720, 1100:-1100]
-
     # src = np.float32([[233, 720], [233, 0], [1087, 0], [1087, 720]])
-    #src = np.float32([[200, 720], [200, 0], [1120, 0], [1120, 720]])
+    # src = np.float32([[200, 720], [200, 0], [1120, 0], [1120, 720]])
     src = np.copy(warping_to)
     src[:, 0] += 1280
     src[:, 1] += 720
-    # dst = np.float32([[233, 720], [605, 450], [691, 450], [1087, 720]])
     dst = np.float32([[200, 720], [604, 450], [696, 450], [1120, 720]])
     dst = np.copy(warping_from)
     dst[:, 0] += 1280
@@ -99,9 +70,9 @@ def draw_lane(img, left_fitx, right_fitx, ploty, orig, M):
 
     new_warp_ext = cv2.warpPerspective(
         color_warp_ext, M_ext, (1280*3, 720*3))
-
     new_warp_ext = new_warp_ext[720:-720, 1280:-1280]
-    return cv2.addWeighted(orig, 1, new_warp_ext, 0.3, 0), lines_ext
+    weighted = cv2.addWeighted(orig, 1, new_warp_ext, 0.3, 0)
+    return weighted, lines_ext
 
 
 def determine_curvature(left_fitx, right_fitx, ploty):
@@ -129,29 +100,16 @@ def determine_position(left_fitx, right_fitx):
     return round((left_offset - right_offset) * xm_per_pix, 2)
 
 
-t_total = []
-
-
 def pipeline(img):
     global left_fit
     global right_fit
-    undistorted = undistort(img)
+    undistorted = camera.undistort(img, mtx, dist)
     binary = threshold.to_binary(undistorted)
     warped, M = warp(binary)
-    helpers.show(warped, 1)
-    # left_fitx, right_fitx, ploty = convolution.detect_lanes(warped)
-    t = time.clock()
-    # if (frame_no % 5 == 0):
     left_fitx, right_fitx, p, l_fit, r_fit = lanes.fit_polynomial(warped)
-    # else:
-    # left_fitx, right_fitx, p, l_fit, r_fit = lanes.search_around_poly(
-    #     warped, left_fit, right_fit)
-    # left_fitx, right_fitx, p, l_fit, r_fit = convolution.detect_lanes(warped)
-    t_total.append((time.clock() - t) * 1000)
     left_fit = l_fit
     right_fit = r_fit
     ploty = p
-
     left_curverad, right_curverad = determine_curvature(
         left_fitx, right_fitx, ploty)
     position = determine_position(left_fitx, right_fitx)
@@ -160,37 +118,7 @@ def pipeline(img):
     return lane, lines, binary * 255, left_curverad, right_curverad, position
 
 
-def draw_text(img, lines):
-    top_offset = 30
-    left_offset = 20
-
-    for i, line in enumerate(lines):
-        cv2.putText(img,
-                    line,
-                    (20, top_offset + top_offset*i),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    1,
-                    (0, 0, 0,),
-                    2,
-                    cv2.LINE_AA)
-
-
-def combine(lane, warped, binary, left_curverad, right_curverad, position):
-    warped_sm = cv2.resize(warped, (320, 180))
-    lane[5:185, -325:-5] = np.dstack((warped_sm, warped_sm, warped_sm))
-    binary_sm = cv2.resize(binary, (320, 180))
-    lane[5:185, -650:-330] = np.dstack((binary_sm, binary_sm, binary_sm))
-
-    draw_text(lane, [
-        'Radius left: {}'.format(left_curverad),
-        'Radius right: {}'.format(right_curverad),
-        'Position: {}'.format(position),
-    ])
-
-    return lane
-
-
-mtx, dist = calibrate_camera()
+mtx, dist = camera.calibrate()
 
 if len(sys.argv) != 2:
     raise Exception('missing path')
@@ -198,22 +126,16 @@ if len(sys.argv) != 2:
 if sys.argv[1][-4:] == ".mp4":
     reader = skvideo.io.FFmpegReader(sys.argv[1])
     writer = skvideo.io.FFmpegWriter("/home/m/Videos/output.mp4")
-
     for frame in reader.nextFrame():
-        lane, warped, binary, left_curverad, right_curverad, position = pipeline(
-            frame)
-        combined = combine(lane, warped, binary,
-                           left_curverad, right_curverad, position)
+        profile and click_stopwatch('Frame started')
+        combined = drawer.combine(*pipeline(frame))
         writer.writeFrame(combined)
         frame_no += 1
+        profile and click_stopwatch('Frame ended')
 
     reader.close()
     writer.close()
-    print(sum(t_total) / len(t_total))
 else:
     image = np.asarray(Image.open(sys.argv[1]))[:, :, :3]
-    lane, warped, binary, left_curverad, right_curverad, position = pipeline(
-        image)
-    combined = combine(lane, warped, binary, left_curverad,
-                       right_curverad, position)
+    combined = drawer.combine(*pipeline(image))
     helpers.show(combined)

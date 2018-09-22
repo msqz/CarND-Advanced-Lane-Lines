@@ -11,9 +11,8 @@ def by_color(img):
     binary = np.zeros_like(s_channel)
     h_range = (h_channel >= 12) & (h_channel <= 27)
     s_range = (s_channel >= 80)
-    l_range = (l_channel >= 180)
-    binary[h_range & s_range | l_range] = 1
-    helpers.show(binary, 1)
+    l_range = (l_channel >= 80) & (l_channel < 200)
+    binary[h_range & s_range & l_range] = 1
     return binary
 
 
