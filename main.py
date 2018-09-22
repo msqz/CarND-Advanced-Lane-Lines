@@ -13,7 +13,7 @@ import threshold
 import lanes
 import convolution
 import helpers
-import camera
+import transformation
 import drawer
 
 profile = False
@@ -75,50 +75,25 @@ def draw_lane(img, left_fitx, right_fitx, ploty, orig, M):
     return weighted, lines_ext
 
 
-def determine_curvature(left_fitx, right_fitx, ploty):
-    ym_per_pix = 30/720
-    xm_per_pix = 3.7/700
-
-    left_fit_cr = np.polyfit(ploty*ym_per_pix, left_fitx*xm_per_pix, 2)
-    right_fit_cr = np.polyfit(ploty*ym_per_pix, right_fitx*xm_per_pix, 2)
-
-    y_eval = np.max(ploty)
-    # Implement the calculation of the left line here
-    left_curverad = (
-        (1 + (2*left_fit_cr[0]*y_eval*ym_per_pix + left_fit_cr[1])**2)**(3/2)) / abs(2*left_fit_cr[0])
-    # Implement the calculation of the right line here
-    right_curverad = (
-        (1 + (2*right_fit_cr[0]*y_eval*xm_per_pix + right_fit_cr[1])**2)**(3/2)) / abs(2*right_fit_cr[0])
-
-    return round(left_curverad, 2), round(right_curverad, 2)
-
-
-def determine_position(left_fitx, right_fitx):
-    xm_per_pix = 3.7/700
-    left_offset = 640 - left_fitx[-1]
-    right_offset = right_fitx[-1] - 640
-    return round((left_offset - right_offset) * xm_per_pix, 2)
-
-
 def pipeline(img):
     global left_fit
     global right_fit
-    undistorted = camera.undistort(img, mtx, dist)
+    undistorted = transformation.undistort(img, mtx, dist)
     binary = threshold.to_binary(undistorted)
     warped, M = warp(binary)
     left_fitx, right_fitx, p, l_fit, r_fit = lanes.fit_polynomial(warped)
     left_fit = l_fit
     right_fit = r_fit
     ploty = p
-    left_curverad, right_curverad = determine_curvature(
+    left_curverad, right_curverad = geometry.determine_curvature(
         left_fitx, right_fitx, ploty)
-    position = determine_position(left_fitx, right_fitx)
+    position = geometry.determine_position(left_fitx, right_fitx)
     lane, lines = draw_lane(
         warped, left_fitx, right_fitx, ploty, undistorted, M)
     return lane, lines, binary * 255, left_curverad, right_curverad, position
 
 
-mtx, dist = camera.calibrate()
+mtx, dist = transformation.calibrate()
 
 if len(sys.argv) != 2:
     raise Exception('missing path')
