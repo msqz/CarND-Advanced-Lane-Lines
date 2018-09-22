@@ -21,6 +21,9 @@ left_fit = None
 right_fit = None
 ploty = None
 
+warping_from = np.float32([[200, 720], [604, 450], [696, 450], [1120, 720]])
+warping_to = np.float32([[200, 720], [200, 0], [1120, 0], [1120, 720]])
+
 
 def calibrate_camera():
     criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
@@ -55,17 +58,14 @@ def undistort(img):
 
 
 def warp(img):
-    # src = np.float32([[200, 720], [572, 450], [734, 450], [1120, 720]])
-    # dst = np.float32([[200, 720], [200, 0], [1120, 0], [1120, 720]])
-    src = np.float32([[233, 720], [605, 450], [691, 450], [1087, 720]])
-    dst = np.float32([[233, 720], [233, 0], [1087, 0], [1087, 720]])
-    M = cv2.getPerspectiveTransform(src, dst)
+    # src = np.float32([[233, 720], [605, 450], [691, 450], [1087, 720]])
+    # dst = np.float32([[233, 720], [233, 0], [1087, 0], [1087, 720]])
+
+    M = cv2.getPerspectiveTransform(warping_from, warping_to)
     return cv2.warpPerspective(img, M, (1280, 720)), M
 
 
 def draw_lane(img, left_fitx, right_fitx, ploty, orig, M):
-    # warp_zero = np.zeros_like(img).astype(np.uint8)
-    # color_warp = np.dstack((warp_zero, warp_zero, warp_zero))
 
     pts_left = np.array([np.transpose(np.vstack([left_fitx, ploty]))])
     pts_right = np.array([
@@ -74,33 +74,25 @@ def draw_lane(img, left_fitx, right_fitx, ploty, orig, M):
 
     pts = np.hstack((pts_left, pts_right))
 
-    # cv2.fillPoly(color_warp, np.int_([pts]), (0, 255, 0))
-    # lines = np.copy(img)
-    # cv2.polylines(lines, np.int_([pts]), False, (255, 0, 0), 5)
-    # Minv = np.linalg.inv(M)
-
-    # newwarp = cv2.warpPerspective(
-    #     color_warp, Minv, (orig.shape[1], orig.shape[0]))
-
-    # extending start
     pts_ext = np.copy(pts)
     pts_ext[0, :, 0] += 1280
     pts_ext[0, :, 1] += 720
 
-    color_warp_ext = np.zeros((720*3, 1280*3)).astype(np.uint8)
-    color_warp_ext = np.dstack(
-        (color_warp_ext, color_warp_ext, color_warp_ext))
+    color_warp_ext = np.zeros((720*3, 1280*3, 3)).astype(np.uint8)
     cv2.fillPoly(color_warp_ext, np.int_([pts_ext]), (0, 255, 0))
 
-    lines_ext = np.zeros(img.shape)
-    lines_ext = np.hstack((lines_ext, lines_ext, lines_ext))
-    lines_ext = np.vstack((lines_ext, lines_ext, lines_ext))
-    cv2.polylines(lines_ext, np.int_([pts_ext]), False, (255, 0, 0), 5)
+    lines_ext = np.zeros((color_warp_ext.shape[0], color_warp_ext.shape[1]))
+    cv2.polylines(lines_ext, np.int_([pts_ext]), False, (255, 0, 0), 15)
+    lines_ext = lines_ext[720:-720, 1100:-1100]
 
-    src = np.float32([[233, 720], [233, 0], [1087, 0], [1087, 720]])
+    # src = np.float32([[233, 720], [233, 0], [1087, 0], [1087, 720]])
+    #src = np.float32([[200, 720], [200, 0], [1120, 0], [1120, 720]])
+    src = np.copy(warping_to)
     src[:, 0] += 1280
     src[:, 1] += 720
-    dst = np.float32([[233, 720], [605, 450], [691, 450], [1087, 720]])
+    # dst = np.float32([[233, 720], [605, 450], [691, 450], [1087, 720]])
+    dst = np.float32([[200, 720], [604, 450], [696, 450], [1120, 720]])
+    dst = np.copy(warping_from)
     dst[:, 0] += 1280
     dst[:, 1] += 720
     M_ext = cv2.getPerspectiveTransform(src, dst)
@@ -109,8 +101,6 @@ def draw_lane(img, left_fitx, right_fitx, ploty, orig, M):
         color_warp_ext, M_ext, (1280*3, 720*3))
 
     new_warp_ext = new_warp_ext[720:-720, 1280:-1280]
-    # extending end
-
     return cv2.addWeighted(orig, 1, new_warp_ext, 0.3, 0), lines_ext
 
 
@@ -148,6 +138,7 @@ def pipeline(img):
     undistorted = undistort(img)
     binary = threshold.to_binary(undistorted)
     warped, M = warp(binary)
+    helpers.show(warped, 1)
     # left_fitx, right_fitx, ploty = convolution.detect_lanes(warped)
     t = time.clock()
     # if (frame_no % 5 == 0):
@@ -220,7 +211,7 @@ if sys.argv[1][-4:] == ".mp4":
     writer.close()
     print(sum(t_total) / len(t_total))
 else:
-    image = np.asarray(Image.open(sys.argv[1]))
+    image = np.asarray(Image.open(sys.argv[1]))[:, :, :3]
     lane, warped, binary, left_curverad, right_curverad, position = pipeline(
         image)
     combined = combine(lane, warped, binary, left_curverad,
