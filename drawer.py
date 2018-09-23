@@ -53,6 +53,9 @@ def crop(new_warp_ext, h, w):
 
 
 def draw_lane(left, right, orig):
+    if left.bestx is None or right.bestx is None:
+        return orig, np.zeros(orig.shape[:2])
+
     ploty = np.linspace(0, 719-1, 720)
     pts_left = np.array(
         [np.transpose(np.vstack([left.bestx, ploty]))])

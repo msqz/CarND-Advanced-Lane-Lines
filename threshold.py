@@ -25,8 +25,8 @@ def by_color(img):
 
 
 def by_gradient(gray):
-    sobelx = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=3)
-    sobely = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=3)
+    sobelx = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=7)
+    sobely = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=7)
     sobel = np.sqrt(np.square(sobelx) + np.square(sobely))
     sobel = np.uint8(255*sobel/np.max(sobel))
 
@@ -42,6 +42,8 @@ def by_gradient(gray):
 
     binary = np.zeros_like(graddir)
     binary[(binary_mag == 1) & (binary_grad == 1)] = 1
+
+    helpers.show(binary, 1)
 
     return binary
 

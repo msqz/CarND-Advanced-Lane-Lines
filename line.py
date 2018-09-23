@@ -27,6 +27,9 @@ class Line():
         self.ally = None
 
     def get_curverad(self):
+        if not self.detected:
+            return 0
+
         ploty = np.linspace(0, 719-1, 720)
         left_fit_cr = np.polyfit(ploty*ym_per_pix, self.bestx*xm_per_pix, 2)
 
@@ -37,5 +40,8 @@ class Line():
         return int(curverad)
 
     def get_line_base_pos(self):
+        if not self.detected:
+            return 0
+
         offset = abs(640 - self.bestx[-1])
         return round(offset * xm_per_pix, 2)
