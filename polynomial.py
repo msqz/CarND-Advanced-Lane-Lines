@@ -68,7 +68,6 @@ def find_lane_pixels(img):
 
 def fit_polynomial(img, left, right):
     if not left.detected or not right.detected:
-        print('undetected')
         left.allx, left.ally, right.allx, right.ally = find_lane_pixels(img)
 
     ploty = np.linspace(0, img.shape[0]-1, img.shape[0])
