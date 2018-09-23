@@ -18,7 +18,8 @@ def draw_text(img, paragraphs):
                     cv2.LINE_AA)
 
 
-def extend_canvas(pts):
+def extend(pts):
+    '''Matrix gets extended to allow drawing full length lane edges'''
     # --- 58 ms ---
     pts_ext = np.copy(pts)
     pts_ext[0, :, 0] += 1280
@@ -31,9 +32,8 @@ def extend_canvas(pts):
     return color_warp_ext, lines_ext
 
 
-def unwarp_extended(color_warp_ext):
-    ''' Extended matrix is now transformed back to be in perspective
-    '''
+def unwarp(extended):
+    '''Extended matrix is now transformed back to be in perspective'''
     # --- 116 ms ---
     src = np.copy(transformation.warping_to)
     src[:, 0] += 1280
@@ -41,43 +41,47 @@ def unwarp_extended(color_warp_ext):
     dst = np.copy(transformation.warping_from)
     dst[:, 0] += 1280
     dst[:, 1] += 720
-    M_ext = cv2.getPerspectiveTransform(src, dst)
+    M_inv = cv2.getPerspectiveTransform(src, dst)
 
     return cv2.warpPerspective(
-        color_warp_ext, M_ext, (1280*3, 720*3))
+        extended, M_inv, (1280*3, 720*3))
 
 
-def crop_to_original(new_warp_ext):
-    return new_warp_ext[720:-720, 1280:-1280]
+def crop(new_warp_ext, h, w):
+    '''Matrix central area gets extracted'''
+    return new_warp_ext[h:-h, w:-w]
 
 
-def draw_lane(lane, orig):
+def draw_lane(left, right, orig):
     pts_left = np.array(
-        [np.transpose(np.vstack([lane.left_fitx, lane.ploty]))])
+        [np.transpose(np.vstack([left.bestx, left.ally]))])
     pts_right = np.array([
-        np.flipud(np.transpose(np.vstack([lane.right_fitx, lane.ploty])))
+        np.flipud(np.transpose(np.vstack([right.bestx, right.ally])))
     ])
     pts = np.hstack((pts_left, pts_right))
 
-    color_warp_ext, lines_ext = extend_canvas(pts)
+    extended, lines_ext = extend(pts)
 
-    new_warp_ext = unwarp_extended(color_warp_ext)
+    unwarped = unwarp(extended)
 
-    new_warp_ext = crop_to_original(new_warp_ext)
+    cropped = crop(unwarped, orig.shape[0], orig.shape[1])
 
-    weighted = cv2.addWeighted(orig, 1, new_warp_ext, 0.3, 0)
+    weighted = cv2.addWeighted(orig, 1, cropped, 0.3, 0)
 
     return weighted, lines_ext
 
 
-def combine(img, warped, binary, curverad, position):
-    warped_sm = cv2.resize(warped, (320, 180))
-    img[5:185, -325:-5] = np.dstack((warped_sm, warped_sm, warped_sm))
-    binary_sm = cv2.resize(binary, (320, 180))
-    img[5:185, -650:-330] = np.dstack((binary_sm, binary_sm, binary_sm))
+def combine(img, warped, lines, binary, left_curverad, right_curverad, position):
+    lines_sm = cv2.resize(lines, (240, 180))
+    img[5:185, -245:-5] = np.dstack((lines_sm, lines_sm, lines_sm))
+    binary_sm = cv2.resize(binary, (240, 180))
+    img[5:185, -490:-250] = np.dstack((binary_sm, binary_sm, binary_sm))
+    warped_sm = cv2.resize(warped, (240, 180))
+    img[5:185, -735:-495] = np.dstack((warped_sm, warped_sm, warped_sm))
 
     draw_text(img, [
-        'Radius: {}m'.format(curverad),
+        'Radius left: {}m'.format(left_curverad),
+        'Radius right: {}m'.format(right_curverad),
         'Position: {}m'.format(position),
     ])
 

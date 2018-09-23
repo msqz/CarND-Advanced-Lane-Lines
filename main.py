@@ -10,15 +10,19 @@ import time
 import sys
 
 import threshold
-import lanes
+import polynomial
 import convolution
 import helpers
 import transformation
 import drawer
-from lane import Lane
+from line import Line
 
 mtx, dist = transformation.calibrate()
 frame_no = 0
+sync_each = 5
+
+left = Line()
+right = Line()
 
 
 def pipeline(img):
@@ -29,15 +33,19 @@ def pipeline(img):
 
     warped, M = transformation.warp(binary)
 
-    lane = Lane(lambda: lanes.fit_polynomial(warped))
+    if frame_no % 5 == 0:
+        polynomial.fit_polynomial(warped, left, right)
+    else:
+        polynomial.search_around_poly(warped, left, right)
 
-    curverad = lane.get_curverad()
+    left_curverad = 10  # left.get_curverad()
+    right_curverad = 10  # right.get_curverad()
 
-    position = lane.get_position()
+    position = 10  # lane.get_position()
 
-    lane, lines = drawer.draw_lane(lane, undistorted)
+    lane, lines = drawer.draw_lane(left, right, undistorted)
 
-    return lane, lines, binary * 255, curverad, position
+    return lane, warped * 255, lines, binary * 255, left_curverad, right_curverad, position
 
 
 def photo():
@@ -47,6 +55,7 @@ def photo():
 
 
 def video():
+    global frame_no
     reader = skvideo.io.FFmpegReader(sys.argv[1])
     writer = skvideo.io.FFmpegWriter("/home/m/Videos/output.mp4")
     for frame in reader.nextFrame():

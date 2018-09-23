@@ -2,18 +2,19 @@ import numpy as np
 import cv2
 import matplotlib.pyplot as plt
 
+sync_each = 5
+
 
 def find_lane_pixels(img):
     histogram = np.sum(img[img.shape[0]//2:, :], axis=0)
-    # out_img = np.dstack((img, img, img)) * 255
     midpoint = np.int(histogram.shape[0]//2)
     leftx_base = np.argmax(histogram[:midpoint])
     rightx_base = np.argmax(histogram[midpoint:]) + midpoint
 
     # HYPERPARAMETERS
     nwindows = 9
-    margin = 100
-    minpix = 50
+    margin = 110
+    minpix = 40
 
     window_height = np.int(img.shape[0]//nwindows)
     nonzero = img.nonzero()
@@ -65,37 +66,56 @@ def find_lane_pixels(img):
     return leftx, lefty, rightx, righty
 
 
-def fit_polynomial(img, leftx=None, lefty=None, rightx=None, righty=None):
-    if leftx is None or lefty is None or rightx is None or righty is None:
-        leftx, lefty, rightx, righty = find_lane_pixels(img)
+def fit_polynomial(img, left, right):
+    if not left.detected or not right.detected:
+        left.allx, left.ally, right.allx, right.ally = find_lane_pixels(img)
 
-    left_fit = np.polyfit(lefty, leftx, 2)
-    right_fit = np.polyfit(righty, rightx, 2)
     ploty = np.linspace(0, img.shape[0]-1, img.shape[0])
-    left_fitx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
-    right_fitx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
 
-    return left_fitx, right_fitx, ploty, left_fit, right_fit
+    if len(left.allx) != 0:
+        left_fit = np.polyfit(left.ally, left.allx, 2)
+        left_fitx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
+
+        left.detected = True
+        left.recent_xfitted.append(left_fitx)
+        left.bestx = np.mean(left.recent_xfitted[-sync_each:], axis=0)
+        left.ally = ploty
+        left.current_fit = left_fit
+        left.recent_fit.append(left_fit)
+        left.best_fit = np.mean(left.recent_fit[-sync_each:], axis=0)
+    else:
+        left.detected = False
+
+    if len(right.allx) != 0:
+        right_fit = np.polyfit(right.ally, right.allx, 2)
+        right_fitx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
+
+        right.detected = True
+        right.recent_xfitted.append(right_fitx)
+        right.bestx = np.mean(right.recent_xfitted[-sync_each:], axis=0)
+        right.ally = ploty
+        right.current_fit = right_fit
+        right.recent_fit.append(right_fit)
+        right.best_fit = np.mean(right.recent_fit[-sync_each:], axis=0)
+    else:
+        right.detected = False
 
 
-def search_around_poly(img, left_fit, right_fit):
+def search_around_poly(img, left, right):
     margin = 100
 
     nonzero = img.nonzero()
     nonzeroy = nonzero[0]
     nonzerox = nonzero[1]
 
-    left_lane_inds = ((nonzerox > left_fit[0]*nonzeroy**2 + left_fit[1]*nonzeroy + left_fit[2] - margin) &
-                      (nonzerox < left_fit[0]*nonzeroy**2 + left_fit[1]*nonzeroy + left_fit[2] + margin))
-    right_lane_inds = ((nonzerox > right_fit[0]*nonzeroy**2 + right_fit[1]*nonzeroy + right_fit[2] - margin) &
-                       (nonzerox < right_fit[0]*nonzeroy**2 + right_fit[1]*nonzeroy + right_fit[2] + margin))
+    left_lane_inds = ((nonzerox > left.best_fit[0]*nonzeroy**2 + left.best_fit[1]*nonzeroy + left.best_fit[2] - margin) &
+                      (nonzerox < left.best_fit[0]*nonzeroy**2 + left.best_fit[1]*nonzeroy + left.best_fit[2] + margin))
+    right_lane_inds = ((nonzerox > right.best_fit[0]*nonzeroy**2 + right.best_fit[1]*nonzeroy + right.best_fit[2] - margin) &
+                       (nonzerox < right.best_fit[0]*nonzeroy**2 + right.best_fit[1]*nonzeroy + right.best_fit[2] + margin))
 
-    leftx = nonzerox[left_lane_inds]
-    lefty = nonzeroy[left_lane_inds]
-    rightx = nonzerox[right_lane_inds]
-    righty = nonzeroy[right_lane_inds]
+    left.allx = nonzerox[left_lane_inds]
+    left.ally = nonzeroy[left_lane_inds]
+    right.allx = nonzerox[right_lane_inds]
+    right.ally = nonzeroy[right_lane_inds]
 
-    left_fitx, right_fitx, ploty, left_fit, right_fit = fit_polynomial(
-        img, leftx, lefty, rightx, righty)
-
-    return left_fitx, right_fitx, ploty, left_fit, right_fit
+    fit_polynomial(img, left, right)

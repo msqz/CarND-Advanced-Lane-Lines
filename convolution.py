@@ -3,7 +3,7 @@ import cv2
 import matplotlib.pyplot as plt
 
 
-def draw_frame(image, window_centroids):
+def draw_frame(image, window_centroids, window_width, window_height):
     def window_mask(width, height, img_ref, center, level):
         output = np.zeros_like(img_ref)
         output[int(img_ref.shape[0]-(level+1)*height):int(img_ref.shape[0]-level*height),
@@ -74,9 +74,11 @@ def find_window_centroids(image, window_width, window_height, margin):
     rightx.append(r_center)
     righty.append(image.shape[0])
 
-    # window_centroids.append((l_center, r_center))
+    window_centroids.append((l_center, r_center))
 
     for level in range(1, (int)(image.shape[0]/window_height)):
+        centroids_pair = [None, None]
+
         from_row = int(image.shape[0]-(level+1)*window_height)
         to_row = int(image.shape[0]-level*window_height)
         # layer is flattened to be one one row (sum of columns)
@@ -87,20 +89,28 @@ def find_window_centroids(image, window_width, window_height, margin):
         l_min_index = int(max(l_center+offset-margin, 0))
         l_max_index = int(min(l_center+offset+margin, image.shape[1]))
         # get max of convolved in window frame
-        l_center = np.argmax(
-            conv_signal[l_min_index:l_max_index])+l_min_index-offset
+        l_max_conv_signal = np.argmax(conv_signal[l_min_index:l_max_index])
+        # if there is no signal in current window frame, reuse previous center
+        if (l_max_conv_signal != 0):
+            l_center = l_max_conv_signal+l_min_index-offset
+            leftx.append(l_center)
+            lefty.append(to_row)
+            centroids_pair[0] = l_center
 
         r_min_index = int(max(r_center+offset-margin, 0))
         r_max_index = int(min(r_center+offset+margin, image.shape[1]))
-        r_center = np.argmax(
-            conv_signal[r_min_index:r_max_index])+r_min_index-offset
+        # get max of convolved in window frame
+        r_max_conv_signal = np.argmax(conv_signal[r_min_index:r_max_index])
+        # if there is no signal in current window frame, reuse previous center
+        if (r_max_conv_signal != 0):
+            r_center = r_max_conv_signal+r_min_index-offset
+            rightx.append(r_center)
+            righty.append(to_row)
+            centroids_pair[1] = r_center
 
-        leftx.append(l_center)
-        lefty.append(to_row)
-        rightx.append(r_center)
-        righty.append(to_row)
-    #   window_centroids.append((l_center, r_center))
+        window_centroids.append((centroids_pair[0], centroids_pair[1]))
 
+    #draw_frame(image, window_centroids, window_width, window_height)
     return leftx, lefty, rightx, righty
 
 
