@@ -19,7 +19,7 @@ def draw_text(img, paragraphs):
 
 
 def extend(pts):
-    '''Matrix gets extended to allow drawing full length lane edges'''
+    '''Matrix gets extended to allow drawing full lane edges (they are cropped to the size of the image)'''
     # --- 58 ms ---
     pts_ext = np.copy(pts)
     pts_ext[0, :, 0] += 1280
@@ -53,10 +53,11 @@ def crop(new_warp_ext, h, w):
 
 
 def draw_lane(left, right, orig):
+    ploty = np.linspace(0, 719-1, 720)
     pts_left = np.array(
-        [np.transpose(np.vstack([left.bestx, left.ally]))])
+        [np.transpose(np.vstack([left.bestx, ploty]))])
     pts_right = np.array([
-        np.flipud(np.transpose(np.vstack([right.bestx, right.ally])))
+        np.flipud(np.transpose(np.vstack([right.bestx, ploty])))
     ])
     pts = np.hstack((pts_left, pts_right))
 

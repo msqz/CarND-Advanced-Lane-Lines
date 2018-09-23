@@ -19,8 +19,6 @@ class Line():
         # polynomial coefficients for the most recent fit
         self.current_fit = []
 
-        # distance in meters of vehicle center from the line
-        self.line_base_pos = None
         # difference in fit coefficients between last and new fits
         self.diffs = []
         # x values for detected line pixels
@@ -29,11 +27,15 @@ class Line():
         self.ally = None
 
     def get_curverad(self):
-        left_fit_cr = np.polyfit(
-            self.ally*ym_per_pix, self.bestx*xm_per_pix, 2)
+        ploty = np.linspace(0, 719-1, 720)
+        left_fit_cr = np.polyfit(ploty*ym_per_pix, self.bestx*xm_per_pix, 2)
 
-        y_eval = np.max(self.ally)
+        y_eval = np.max(ploty)
         curverad = (
             (1 + (2*self.best_fit[0]*y_eval*ym_per_pix + self.best_fit[1])**2)**(3/2)) / abs(2*self.best_fit[0])
 
         return int(curverad)
+
+    def get_line_base_pos(self):
+        offset = abs(640 - self.bestx[-1])
+        return round(offset * xm_per_pix, 2)

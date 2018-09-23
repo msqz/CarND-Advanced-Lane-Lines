@@ -38,10 +38,10 @@ def pipeline(img):
     else:
         polynomial.search_around_poly(warped, left, right)
 
-    left_curverad = 10  # left.get_curverad()
-    right_curverad = 10  # right.get_curverad()
+    left_curverad = left.get_curverad()
+    right_curverad = right.get_curverad()
 
-    position = 10  # lane.get_position()
+    position = round(left.get_line_base_pos() - right.get_line_base_pos(), 2)
 
     lane, lines = drawer.draw_lane(left, right, undistorted)
 

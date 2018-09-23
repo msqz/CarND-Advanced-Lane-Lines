@@ -68,10 +68,10 @@ def find_lane_pixels(img):
 
 def fit_polynomial(img, left, right):
     if not left.detected or not right.detected:
+        print('undetected')
         left.allx, left.ally, right.allx, right.ally = find_lane_pixels(img)
 
     ploty = np.linspace(0, img.shape[0]-1, img.shape[0])
-
     if len(left.allx) != 0:
         left_fit = np.polyfit(left.ally, left.allx, 2)
         left_fitx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
@@ -79,7 +79,6 @@ def fit_polynomial(img, left, right):
         left.detected = True
         left.recent_xfitted.append(left_fitx)
         left.bestx = np.mean(left.recent_xfitted[-sync_each:], axis=0)
-        left.ally = ploty
         left.current_fit = left_fit
         left.recent_fit.append(left_fit)
         left.best_fit = np.mean(left.recent_fit[-sync_each:], axis=0)
@@ -93,7 +92,6 @@ def fit_polynomial(img, left, right):
         right.detected = True
         right.recent_xfitted.append(right_fitx)
         right.bestx = np.mean(right.recent_xfitted[-sync_each:], axis=0)
-        right.ally = ploty
         right.current_fit = right_fit
         right.recent_fit.append(right_fit)
         right.best_fit = np.mean(right.recent_fit[-sync_each:], axis=0)
