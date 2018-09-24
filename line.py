@@ -18,9 +18,6 @@ class Line():
         self.best_fit = None
         # polynomial coefficients for the most recent fit
         self.current_fit = []
-
-        # difference in fit coefficients between last and new fits
-        self.diffs = []
         # x values for detected line pixels
         self.allx = None
         # y values for detected line pixels

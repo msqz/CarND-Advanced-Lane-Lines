@@ -1,6 +1,8 @@
+import matplotlib.pyplot as plt
 import numpy as np
 import cv2
 import transformation
+import helpers
 
 
 def draw_text(img, paragraphs):
@@ -18,18 +20,23 @@ def draw_text(img, paragraphs):
                     cv2.LINE_AA)
 
 
-def extend(pts):
-    '''Matrix gets extended to allow drawing full lane edges (they are cropped to the size of the image)'''
+def expand(pts):
+    '''
+    Matrix gets extended to allow drawing full lane edges (polynomial graphs).
+    Otherwise any f(x) : (x > edge) would be cropped
+    '''
     # --- 58 ms ---
-    pts_ext = np.copy(pts)
-    pts_ext[0, :, 0] += 1280
-    pts_ext[0, :, 1] += 720
-    color_warp_ext = np.zeros((720*3, 1280*3, 3), dtype=np.uint8)
-    cv2.fillPoly(color_warp_ext, np.int_([pts_ext]), (0, 255, 0))
-    lines_ext = np.zeros((color_warp_ext.shape[0], color_warp_ext.shape[1]))
-    cv2.polylines(lines_ext, np.int_([pts_ext]), False, (255, 0, 0), 15)
-    lines_ext = lines_ext[720:-720, 1100:-1100]
-    return color_warp_ext, lines_ext
+    pts_expanded = np.copy(pts)
+    pts_expanded[0, :, 0] += 1280
+    pts_expanded[0, :, 1] += 720
+    lane = np.zeros((720*3, 1280*3, 3), dtype=np.uint8)
+    cv2.fillPoly(lane, np.int_([pts_expanded]), (0, 255, 0))
+
+    lines = np.zeros((lane.shape[0], lane.shape[1]))
+    cv2.polylines(lines, np.int_([pts_expanded]), False, (255, 0, 0), 15)
+    lines = lines[720:-720, 1100:-1100]
+
+    return lane, lines
 
 
 def unwarp(extended):
@@ -52,30 +59,31 @@ def crop(new_warp_ext, h, w):
     return new_warp_ext[h:-h, w:-w]
 
 
-def draw_lane(left, right, orig):
-    if left.bestx is None or right.bestx is None:
-        return orig, np.zeros(orig.shape[:2])
-
+def build_points(left, right):
     ploty = np.linspace(0, 719-1, 720)
     pts_left = np.array(
         [np.transpose(np.vstack([left.bestx, ploty]))])
     pts_right = np.array([
         np.flipud(np.transpose(np.vstack([right.bestx, ploty])))
     ])
-    pts = np.hstack((pts_left, pts_right))
+    return np.hstack((pts_left, pts_right))
 
-    extended, lines_ext = extend(pts)
 
-    unwarped = unwarp(extended)
+def draw_lane(img, left, right):
+    if not left.detected or not right.detected:
+        return img, np.zeros(img.shape[:2])
 
-    cropped = crop(unwarped, orig.shape[0], orig.shape[1])
+    pts = build_points(left, right)
+    expanded, lines = expand(pts)
+    unwarped = unwarp(expanded)
+    cropped = crop(unwarped, img.shape[0], img.shape[1])
+    weighted = cv2.addWeighted(img, 1, cropped, 0.3, 0)
 
-    weighted = cv2.addWeighted(orig, 1, cropped, 0.3, 0)
-
-    return weighted, lines_ext
+    return weighted, lines
 
 
 def combine(img, warped, lines, binary, left_curverad, right_curverad, position):
+    '''The partial results are merged into one frame with the output image'''
     lines_sm = cv2.resize(lines, (240, 180))
     img[5:185, -245:-5] = np.dstack((lines_sm, lines_sm, lines_sm))
     binary_sm = cv2.resize(binary, (240, 180))
@@ -90,3 +98,20 @@ def combine(img, warped, lines, binary, left_curverad, right_curverad, position)
     ])
 
     return img
+
+
+def illustrate(undistorted, left, right):
+    _, lines = draw_lane(undistorted, left, right)
+
+    offset = (lines.shape[1] - undistorted.shape[1]) // 2
+    print(offset)
+    out_img = np.zeros((lines.shape[0], lines.shape[1], 3))
+    out_img[left.ally, left.allx + offset] = [255, 0, 0]
+    out_img[right.ally, right.allx + offset] = [0, 0, 255]
+    ploty = np.linspace(0, lines.shape[0] - 1, lines.shape[0])
+
+    fig, ax = plt.subplots()
+    ax.imshow(out_img)
+    ax.plot(left.bestx + offset, ploty, color="yellow")
+    ax.plot(right.bestx + offset, ploty, color="yellow")
+    plt.show()

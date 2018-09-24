@@ -2,7 +2,7 @@ import numpy as np
 import cv2
 import matplotlib.pyplot as plt
 
-sync_each = 5
+sync_each = 10
 
 
 def find_lane_pixels(img):
@@ -66,8 +66,8 @@ def find_lane_pixels(img):
     return leftx, lefty, rightx, righty
 
 
-def fit_polynomial(img, left, right):
-    if not left.detected or not right.detected:
+def fit_polynomial(img, left, right, refit=False):
+    if refit:
         left.allx, left.ally, right.allx, right.ally = find_lane_pixels(img)
 
     ploty = np.linspace(0, img.shape[0]-1, img.shape[0])

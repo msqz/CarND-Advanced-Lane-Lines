@@ -11,12 +11,12 @@ def by_color(img):
     binary = np.zeros_like(s_channel)
 
     # yellow
-    lower_yellow = np.array([12, 139, 120])  # 100
+    lower_yellow = np.array([12, 40, 100])  # 100
     upper_yellow = np.array([27, 200, 255])
     yellow_mask = cv2.inRange(hls, lower_yellow, upper_yellow)
 
     # white
-    lower_white = np.array([0, 200, 0])
+    lower_white = np.array([0, 194, 0])
     upper_white = np.array([255, 255, 255])
     white_mask = cv2.inRange(hls, lower_white, upper_white)
     binary = yellow_mask + white_mask
@@ -25,13 +25,13 @@ def by_color(img):
 
 
 def by_gradient(gray):
-    sobelx = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=7)
-    sobely = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=7)
+    sobelx = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=5)
+    sobely = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=5)
     sobel = np.sqrt(np.square(sobelx) + np.square(sobely))
     sobel = np.uint8(255*sobel/np.max(sobel))
 
     binary_mag = np.zeros_like(sobel)
-    binary_mag[sobel >= 40] = 1
+    binary_mag[sobel >= 70] = 1
 
     abs_sobelx = np.absolute(sobelx)
     abs_sobely = np.absolute(sobely)
@@ -40,10 +40,8 @@ def by_gradient(gray):
     binary_grad = np.zeros_like(graddir)
     binary_grad[(graddir >= 0.2) & (graddir <= 1.4)] = 1
 
-    binary = np.zeros_like(graddir)
+    binary = np.zeros_like(graddir, dtype=np.uint8)
     binary[(binary_mag == 1) & (binary_grad == 1)] = 1
-
-    helpers.show(binary, 1)
 
     return binary
 
@@ -52,4 +50,4 @@ def to_binary(img):
     color = by_color(img)
     gradient = by_gradient(color)
 
-    return gradient.astype(np.uint8)
+    return gradient
