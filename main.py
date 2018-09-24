@@ -24,9 +24,11 @@ right = Line()
 
 
 def is_valid(left, right):
+    # Undetected line forces recalculating from scratch
     if not left.detected or not right.detected:
         return False
 
+    # Checking if the lanes are roughly parallel
     if left.bestx[0] == right.bestx[0] or left.bestx[-1] == right.bestx[-1]:
         return False
 
@@ -34,6 +36,7 @@ def is_valid(left, right):
 
 
 def illustrate_steps(img):
+    '''That's only for illustration purpose, not a part of process'''
     undistorted = transformation.undistort(img, mtx, dist)
     a = np.copy(undistorted)
     cv2.polylines(a, np.int_(
@@ -50,10 +53,12 @@ def illustrate_steps(img):
     plt.imshow(b)
     plt.show()
 
-    polynomial.fit_polynomial(warped, left, right, refit=True)
-
 
 def pipeline(img):
+    # Illustration purpose only
+    illustrate_steps(img)
+
+    '''The main process of detecting lane'''
     # 1. Removing distortion from the input image
     undistorted = transformation.undistort(img, mtx, dist)
 
