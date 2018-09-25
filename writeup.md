@@ -97,7 +97,7 @@ It's the difference between the left and right edge of the lane, scaled using pi
 
 The polynomial function graph would be cropped when results are out of the 0 - 1280 range (image width). That occurs in case of a sharp turn. To overcome that I first extend the canvas on which the functions will be plotted to be `3 x height` and `3 x width` of the original image (line 28 of function `expand()` in file `drawer.py`). Then I move the points of the function graph to the center of expanded canvas (lines 31-31 of function `expand()` in file `drawer.py`). That way the graph can be plotted for every value of y (0 to 720), even when it exceeds the edge of the original image (polynomial(y) < 0 or polynomial(y) > 1280). Then the expanded canvas is warped back to be in perspective of the camera image (line 77 in function `draw_lane()`) and then cropped to fit into the original image (line 78, 79).
 
-The output image is built in function `combine` in file `drawer.py`. The image contains preview of processing stages, so the correlation between processing result and the output can be seen.
+The output image is built in function `combine()` in file `drawer.py`. The image contains preview of processing stages, so the correlation between processing result and the output can be seen.
 
 ![alt text][image6]
 
