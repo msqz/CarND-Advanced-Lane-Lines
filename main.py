@@ -55,9 +55,6 @@ def illustrate_steps(img):
 
 
 def pipeline(img):
-    # Illustration purpose only
-    illustrate_steps(img)
-
     '''The main process of detecting lane'''
     # 1. Removing distortion from the input image
     undistorted = transformation.undistort(img, mtx, dist)
@@ -83,11 +80,6 @@ def pipeline(img):
 
     # 6. Calculation position on lane (offset to the left or right)
     position = round(left.get_line_base_pos() - right.get_line_base_pos(), 2)
-
-    # Only for illustration purpose - it pauses the process
-    # by displaying image
-    #
-    # drawer.illustrate(undistorted, left, right)
 
     # 7. Detected lane is put on top of the road image.
     lane, lines = drawer.draw_lane(undistorted, left, right)

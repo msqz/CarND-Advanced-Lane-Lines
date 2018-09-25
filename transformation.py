@@ -27,6 +27,7 @@ def calibrate():
 
     ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(
         objpoints, imgpoints, gray.shape[::-1], None, None)
+
     return mtx, dist
 
 

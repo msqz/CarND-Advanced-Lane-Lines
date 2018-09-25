@@ -25,11 +25,11 @@ def expand(pts):
     Matrix gets extended to allow drawing full lane edges (polynomial graphs).
     Otherwise any f(x) : (x > edge) would be cropped
     '''
-    # --- 58 ms ---
+    lane = np.zeros((720*3, 1280*3, 3), dtype=np.uint8)
+
     pts_expanded = np.copy(pts)
     pts_expanded[0, :, 0] += 1280
     pts_expanded[0, :, 1] += 720
-    lane = np.zeros((720*3, 1280*3, 3), dtype=np.uint8)
     cv2.fillPoly(lane, np.int_([pts_expanded]), (0, 255, 0))
 
     lines = np.zeros((lane.shape[0], lane.shape[1]))
@@ -41,7 +41,6 @@ def expand(pts):
 
 def unwarp(extended):
     '''Extended matrix is now transformed back to be in perspective'''
-    # --- 116 ms ---
     src = np.copy(transformation.warping_to)
     src[:, 0] += 1280
     src[:, 1] += 720

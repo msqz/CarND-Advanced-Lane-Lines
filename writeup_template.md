@@ -19,11 +19,11 @@ The goals / steps of this project are the following:
 
 [//]: # (Image References)
 
-[image1]: ./output_images/calibrated.jpg "Undistorted"
-[image2]: ./output_images/undistorted.jpg "Road Transformed"
-[image3]: ./output_images/binary.jpg "Binary Example"
-[image4]: ./output_images/transformed.jpg "Warp Example"
-[image5]: ./output_images/lines_detected.jpg "Fit Visual"
+[image1]: ./output_images/calibrated.jpg "Calibrated"
+[image2]: ./output_images/undistorted.jpg "Undistorted"
+[image3]: ./output_images/binary.jpg "Binary"
+[image4]: ./output_images/transformed.jpg "Transformed"
+[image5]: ./output_images/lines_detected.jpg "Detected lines"
 [image6]: ./output_images/output.jpg "Output"
 [video1]: ./output_videos/project_video.mp4 "Video"
 
@@ -43,11 +43,15 @@ You're reading it!
 
 #### 1. Briefly state how you computed the camera matrix and distortion coefficients. Provide an example of a distortion corrected calibration image.
 
-The code for this step is contained in the first code cell of the IPython notebook located in "./examples/example.ipynb" (or in lines # through # of the file called `some_file.py`).  
+That step is performed by `calibrate()` function in `transformation.py` file (line 10). The input is composed of files from `camera_cal` directory. The function returns transformation matrix and distortion coefficients. Those values are used for undistorting images in the next stage of the pipeline.
 
-I start by preparing "object points", which will be the (x, y, z) coordinates of the chessboard corners in the world. Here I am assuming the chessboard is fixed on the (x, y) plane at z=0, such that the object points are the same for each calibration image.  Thus, `objp` is just a replicated array of coordinates, and `objpoints` will be appended with a copy of it every time I successfully detect all chessboard corners in a test image.  `imgpoints` will be appended with the (x, y) pixel position of each of the corners in the image plane with each successful chessboard detection.  
+The idea is to match the real chessboard corners (`objpoints` array) with corners detected on the captured image (`imgpoints`). Corners detection is done by `cv2.findChessboardCorners()` function. Processing all of the calibration images, the `objpoints` and `imgpoints` arrays are passed to `cv2.calibrateCamera()` function, which calculates the mapping between real and distorted points. That mapping is the transformation matrix and the array of distortion coefficients
 
-I then used the output `objpoints` and `imgpoints` to compute the camera calibration and distortion coefficients using the `cv2.calibrateCamera()` function.  I applied this distortion correction to the test image using the `cv2.undistort()` function and obtained this result: 
+I've used `cv2.cornerSubPix` function (https://docs.opencv.org/3.0-beta/modules/imgproc/doc/feature_detection.html#cornersubpix) to increase the accuracy of corners detection.
+
+Camera calibration is performed only once, before the pipeline.
+
+Below is the result of undistoring test image with `cv2.undistort()`, using calculated transformation matrix and distortion coefficients.
 
 ![alt text][image1]
 
@@ -55,58 +59,51 @@ I then used the output `objpoints` and `imgpoints` to compute the camera calibra
 
 #### 1. Provide an example of a distortion-corrected image.
 
-To demonstrate this step, I will describe how I apply the distortion correction to one of the test images like this one:
+Using the transformation matrix and distortion coefficients from camera calibration step, I call the `cv2.undistort()` function to undistort each frame of the input video (it's in `undistort()` function in file `transformation.py`, line 34).
+
+Below is the example frame after undistorting:
 ![alt text][image2]
 
 #### 2. Describe how (and identify where in your code) you used color transforms, gradients or other methods to create a thresholded binary image.  Provide an example of a binary image result.
 
-I used a combination of color and gradient thresholds to generate a binary image (thresholding steps at lines # through # in `another_file.py`).  Here's an example of my output for this step.  (note: this is not actually from one of the test images)
+I used a combination of color and gradient thresholds to generate a binary image (functions `by_color()` and `by_gradient()` in file `threshold.py` - lines 6 and 27). Color detection is based on filtering yellow and white elements of the image. Gradient thresholding is based on calculating magnitude and direction of gradient. Here's the image used in previous step, but now after mentioned transformations:
 
 ![alt text][image3]
 
 #### 3. Describe how (and identify where in your code) you performed a perspective transform and provide an example of a transformed image.
 
-The code for my perspective transform includes a function called `warper()`, which appears in lines 1 through 8 in the file `example.py` (output_images/examples/example.py) (or, for example, in the 3rd code cell of the IPython notebook).  The `warper()` function takes as inputs an image (`img`), as well as source (`src`) and destination (`dst`) points.  I chose the hardcode the source and destination points in the following manner:
+Perspective transformation takes place in function `warp()` in file `transformation.py` (line 43).
+The source and destination points are defined in variables (respoctively) `warp_from` and `warp_to` in `transformation.py` file:
 
 ```python
-src = np.float32(
-    [[(img_size[0] / 2) - 55, img_size[1] / 2 + 100],
-    [((img_size[0] / 6) - 10), img_size[1]],
-    [(img_size[0] * 5 / 6) + 60, img_size[1]],
-    [(img_size[0] / 2 + 55), img_size[1] / 2 + 100]])
-dst = np.float32(
-    [[(img_size[0] / 4), 0],
-    [(img_size[0] / 4), img_size[1]],
-    [(img_size[0] * 3 / 4), img_size[1]],
-    [(img_size[0] * 3 / 4), 0]])
+warping_from = np.float32([[200, 720], [604, 450], [696, 450], [1120, 720]])
+warping_to = np.float32([[200, 720], [200, 0], [1120, 0], [1120, 720]])
 ```
 
-This resulted in the following source and destination points:
-
-| Source        | Destination   | 
-|:-------------:|:-------------:| 
-| 585, 460      | 320, 0        | 
-| 203, 720      | 320, 720      |
-| 1127, 720     | 960, 720      |
-| 695, 460      | 960, 0        |
-
-I verified that my perspective transform was working as expected by drawing the `src` and `dst` points onto a test image and its warped counterpart to verify that the lines appear parallel in the warped image.
+ The image below shows that after warping lines are parallel:
 
 ![alt text][image4]
 
 #### 4. Describe how (and identify where in your code) you identified lane-line pixels and fit their positions with a polynomial?
 
-Then I did some other stuff and fit my lane lines with a 2nd order polynomial kinda like this:
+Detecting lanes is based on sliding window and searching from prior frame. When the processed frame is the first one OR the detected lines are not valid, then sliding window algorithm is executed. Otherwise searching is done in margin around the lines detected in previous frames (file function `pipeline()` in file `main.py`, lines 75 - 78).
+
+The x-axis in the picture below is scaled up to 1640px. That's because I'm using extended canvas for drawing the lines, it's explained in step 6. of the report.
 
 ![alt text][image5]
 
 #### 5. Describe how (and identify where in your code) you calculated the radius of curvature of the lane and the position of the vehicle with respect to center.
 
-I did this in lines # through # in my code in `my_other_file.py`
+Radius is calculated in method `get_curverad()` of the `Line` class (file `line.py`, line 26). It's the result of radius formula, shown in the lectures, multiplied by pixel to meters scale (defined in file `line.py`, lines 3-4).
+
+Offset from the center of the lane is calculated function `pipeline` in file `main.py` (line 82).
+It's the difference between the left and right edge of the lane, scaled using pixel to meters scale. Negative offset means being more to the left side of the lane, positive - to the right side.
 
 #### 6. Provide an example image of your result plotted back down onto the road such that the lane area is identified clearly.
 
-I implemented this step in lines # through # in my code in `yet_another_file.py` in the function `map_lane()`.  Here is an example of my result on a test image:
+The polynomial function graph would be cropped when results are out of the 0 - 1280 range (image width). That occurs in case of a sharp turn. To overcome that I first extend the canvas on which the functions will be plotted to be `3 x height` and `3 x width` of the original image (line 28 of function `expand()` in file `drawer.py`). Then I move the points of the function graph to the center of expanded canvas (lines 31-31 of function `expand()` in file `drawer.py`). That way the graph can be plotted for every value of y (0 to 720), even when it exceeds the edge of the original image (polynomial(y) < 0 or polynomial(y) > 1280). Then the expanded canvas is warped back to be in perspective of the camera image (line 77 in function `draw_lane()`) and then cropped to fit into the original image (line 78, 79).
+
+The output image is built in function `combine` in file `drawer.py`. The image contains preview of processing stages, so the correlation between processing result and the output can be seen.
 
 ![alt text][image6]
 
@@ -116,7 +113,7 @@ I implemented this step in lines # through # in my code in `yet_another_file.py`
 
 #### 1. Provide a link to your final video output.  Your pipeline should perform reasonably well on the entire project video (wobbly lines are ok but no catastrophic failures that would cause the car to drive off the road!).
 
-Here's a [link to my video result](./project_video.mp4)
+Here's a [link to my video result](./output_videos/project_video.mp4)
 
 ---
 
@@ -124,4 +121,9 @@ Here's a [link to my video result](./project_video.mp4)
 
 #### 1. Briefly discuss any problems / issues you faced in your implementation of this project.  Where will your pipeline likely fail?  What could you do to make it more robust?
 
-Here I'll talk about the approach I took, what techniques I used, what worked and why, where the pipeline might fail and how I might improve it if I were going to pursue this project further.  
+My pipeline has some minor problems with detecting small broken lines on curves. It's a matter of avoiding noise when detecting lines - random bright spots interfere the measeurements, so they have to be eliminated.
+
+I think there are 2 main areas for improvement:
+1. Harsh light - the dynamic range of the image is so wide, that it's hard to detect a lane when one of edges is in the shadow and the other is in bright light. I'm wondering about separating the shadow areas and normalize the brightness level there. In harsh ligting shadows have very sharp edges and they are very dark, comparing to the rest of the scene, so maybe they can be detected using some gradient processing.
+
+2. Tarmac surface - smooth and dark tarmac with bold lines makes detection easy, but the bright one with or the one with patches creates a lot of noise. That could be handled by detecting shapes which are not similar to road lines, and by eliminating them from the image.
